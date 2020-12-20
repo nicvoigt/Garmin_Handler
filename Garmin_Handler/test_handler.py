@@ -5,5 +5,8 @@ activities = Overview_File_Reader().read_file()
 #print(activities.columns)
 
 file_list = create_files_list()
-target_path = r"C:\Users\nicoj\netcase\1-Start-UP\Triathlon\Aktivitaeten_csv"
+target_path = r"C:\Users\nicoj\netcase\1-Start-UP\Triathlon\Aktivitaeten_csv_2"
 create_activity_csv_files(file_list, activities,target_path)
+
+#run_data =Activity_Handler(activities).run_data()
+#print(run_data["pace_decimal"])

@@ -7,6 +7,10 @@ import os
 from time import gmtime, strftime,mktime, strptime
 import datetime
 import warnings
+from . import path
+
+
+overview_file_path = path.path_to_overview_file
 
 
 class Overview_File_Reader(object):
@@ -31,8 +35,37 @@ class Overview_File_Reader(object):
 
     def read_file(self):
         activities = pd.read_csv(os.path.join(self.file_path, "Activities.csv"))
-        activities["Datum"] = pd.to_datetime(activities["Datum"])
+        activities = self.adapt_data_types(activities)
+
         return activities
+
+    def adapt_data_types(self, activities):
+
+        activities["Kalorien"] = activities["Kalorien"].str.replace(",", "")    #delete comma
+        activities["Kalorien"] = pd.to_numeric(activities["Kalorien"], errors="coerce")
+        activities["Distanz"] = pd.to_numeric(activities["Distanz"], errors = "coerce")
+        activities["Ø Herzfrequenz"] = pd.to_numeric(activities["Ø Herzfrequenz"], errors="coerce")
+        activities["Maximale Herzfrequenz"] = pd.to_numeric(activities["Maximale Herzfrequenz"], errors="coerce")
+        activities['Ø Schrittfrequenz (Laufen)'] = pd.to_numeric(activities['Ø Schrittfrequenz (Laufen)'], errors="coerce")
+        activities['Positiver Höhenunterschied'] = pd.to_numeric(activities['Positiver Höhenunterschied'],
+                                                                 errors="coerce")
+
+        # Sonderfall:
+
+        # activities['Ø Pace'] = pd.to_numeric(activities['Ø Pace'], errors="coerce")
+        activities["Datum"] = pd.to_datetime(activities["Datum"])
+
+        # add datetime_values
+        activities["Year"] = activities["Datum"].dt.year
+        activities["Month"] = activities["Datum"].dt.month
+        activities["Week"] = activities["Datum"].dt.isocalendar().week
+        activities["Week"] = activities["Week"] - 1
+        activities["Zeit"] = pd.to_datetime(activities["Zeit"])
+        activities["Minutes"] = activities["Zeit"].dt.minute
+
+        activities["Total time in Minutes"] = activities["Zeit"].dt.hour*60 + activities["Zeit"].dt.minute
+        return activities
+
 
 class Activity_Handler(object):
     def __init__(self, activity_data):
@@ -142,6 +175,17 @@ class Activity_Handler(object):
     # filter for running activities
     def run_data(self):
         self.run_data = self.activity_data[self.activity_data["Aktivitätstyp"]== "Laufen"].reset_index(drop = True)
+
+        minuten = pd.to_numeric(self.run_data[self.run_data["Aktivitätstyp"] == "Laufen"]['Ø Pace'].str.split(":", expand=True)[0])
+        sekunden = pd.to_numeric(self.run_data[self.run_data["Aktivitätstyp"] == "Laufen"]['Ø Pace'].str.split(":", expand=True)[1])
+        pace_dec = minuten + (sekunden / 60)
+        self.run_data["pace_decimal"] = pace_dec
+
+        #best pace
+        bp_minuten = pd.to_numeric(self.run_data[self.run_data["Aktivitätstyp"] == "Laufen"]['Beste Pace'].str.split(":", expand=True)[0])
+        bp_sekunden = pd.to_numeric(self.run_data[self.run_data["Aktivitätstyp"] == "Laufen"]['Beste Pace'].str.split(":", expand=True)[1])
+        bp_pace_dec = bp_minuten + (bp_sekunden / 60)
+        self.run_data["best pace_decimal"] = bp_pace_dec
         return self.run_data
     
     # filter for swimming activities
@@ -220,7 +264,14 @@ def create_activity_csv_files(file_list, of, target_path):
         df = pd.DataFrame([time_list,dist_list,   speed_list, alt_list,  hr_list , temp_list,lat_list,lon_list]).T
         df.columns=['timestamp',"distance", 'enhanced_speed','enhanced_altitude','heart_rate','temperature', "latitude", "longitude"]
 
-        df["timestamp"] = pd.to_datetime(df["timestamp"]) + pd.to_timedelta(2, unit='h')
+        # if wintertime: add 1 hour, if summertime add two hours to the timestamp of the detailed activity
+        wz = pd.Series(["25.10.2020"], name="date")
+        wz = pd.to_datetime(wz)
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
+        if df["timestamp"][0] >= wz[0]:
+            df["timestamp"] = pd.to_datetime(df["timestamp"]) + pd.to_timedelta(1, unit='h')
+        elif df["timestamp"][0] < wz[0]:
+            df["timestamp"] = pd.to_datetime(df["timestamp"]) + pd.to_timedelta(2, unit='h')
         
         #change of["Datum"] to datetime for making it searchable
         of["Datum"] = pd.to_datetime(of["Datum"])
@@ -247,13 +298,16 @@ def create_activity_csv_files(file_list, of, target_path):
                 activity_name = of[(of["Datum"]>(df["timestamp"][0]- pd.to_timedelta(20, unit='min')))& (of["Datum"]<(df["timestamp"][0]+ pd.to_timedelta(20, unit='min')))]["Aktivitätstyp"].reset_index(drop = True)[0]
                 activity_time = of[(of["Datum"]>(df["timestamp"][0]- pd.to_timedelta(20, unit='min')))& (of["Datum"]<(df["timestamp"][0]+ pd.to_timedelta(20, unit='min')))]["Datum"].reset_index(drop = True)[0]
                 print(activity_name)
-            
+
+
+
+
 
 
 
 
         output = pd.to_datetime(activity_time).strftime("%Y%m%d-%H%M%S")
-        df.to_csv(os.path.join(target_path, str(activity_name + "_" + output  + "_"".csv")))
+        df.to_csv(os.path.join(target_path, str(activity_name + "_" + output  + ".csv")))
             
             
                 
