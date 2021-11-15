@@ -1,0 +1,2 @@
+This repo is used to analyze garmin-acticity data from running, swimming and cycling.
+The acticity files can be analyzed and compared. There is also an option to visualize the data in an interactive dashboard.
